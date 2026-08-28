@@ -4,13 +4,18 @@
   const ACTIONS_CELL = '[data-testid="actions-cell"]';
   const ROW_SELECTOR = ".ReactVirtualized__Table__row, [role='row']";
 
-  // Deliberately not Apple's Finder mark, which is their trademark: a folder with
-  // an arrow reads as "open this over there" and matches Box's line-icon style.
+  // Finder-style mark: split rectangle with a face. Drawn as line art to match
+  // Box's other row icons — not Apple's actual asset.
+  // Eye radius and stroke weight are tuned for 16px: at the original 0.9 radius
+  // the pupils fell below a pixel and smeared into the divider.
   const ICON = `<svg viewBox="0 0 20 20" width="16" height="16" fill="none"
-      stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+      stroke="currentColor" stroke-width="1.35" stroke-linecap="round"
       stroke-linejoin="round" aria-hidden="true" focusable="false">
-    <path d="M2.75 5.5a1 1 0 0 1 1-1h3.2a1 1 0 0 1 .8.4l.9 1.2h6.6a1 1 0 0 1 1 1v7.4a1 1 0 0 1-1 1H3.75a1 1 0 0 1-1-1z"/>
-    <path d="M11 11.25 14.5 7.75"/><path d="M11.9 7.75h2.6v2.6"/>
+    <rect x="2.6" y="3.6" width="14.8" height="12.8" rx="2.6"/>
+    <path d="M10 3.6v12.8"/>
+    <circle cx="6.7" cy="8.4" r="1.15" fill="currentColor" stroke="none"/>
+    <circle cx="13.3" cy="8.4" r="1.15" fill="currentColor" stroke="none"/>
+    <path d="M6.6 12.1c2 1.7 4.8 1.7 6.8 0"/>
   </svg>`;
 
   // Candidate anchors in Box's folder header, best first. Box ships UI changes
