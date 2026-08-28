@@ -5,3 +5,7 @@
 .claude/settings.local.json
 
 .DS_Store
+
+# Extension signing key — never commit
+.secrets/
+dist/
