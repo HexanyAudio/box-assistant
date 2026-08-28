@@ -111,7 +111,13 @@ struct PathResolver {
         var parts: [String] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
             guard let c = sqlite3_column_text(stmt, 0) else { continue }
-            parts.append(String(cString: c))
+            let name = String(cString: c)
+            // Box should never hand back a name that can escape the mount, but a
+            // corrupt row must not be able to walk us out of the sync root.
+            guard !name.isEmpty, name != ".", name != "..", !name.contains("/") else {
+                throw ResolveError.outsideRoot
+            }
+            parts.append(name)
         }
         guard !parts.isEmpty else { throw ResolveError.notFound }
         return parts
@@ -123,29 +129,38 @@ struct PathResolver {
     /// arbitrary-path revealer.
     func resolve(id: String, type: ItemType) throws -> URL {
         let parts = try pathComponents(id: id, type: type)
-        var url = syncRoot
-        for part in parts { url.appendPathComponent(part) }
 
-        let rootPath = syncRoot.standardizedFileURL.path
-        let target = url.standardizedFileURL.path
+        // Assembled as a string, and turned into a URL exactly once with an
+        // explicit isDirectory. Both `appendPathComponent` and `standardizedFileURL`
+        // stat the filesystem — the former to decide on a trailing slash — and on a
+        // File Provider mount every one of those stats is a network round trip to
+        // Box. Going through URL cost ~0.6s per lookup; this costs nothing.
+        let rootPath = syncRoot.path
+        let target = ([rootPath] + parts).joined(separator: "/")
+
+        // Components are already validated as single, non-traversing segments, so a
+        // string prefix check is sufficient to prove containment in the sync root.
         guard target == rootPath || target.hasPrefix(rootPath + "/") else {
             throw ResolveError.outsideRoot
         }
-        return url
+        return URL(fileURLWithPath: target, isDirectory: type == .folder)
     }
 
     /// Nearest ancestor of `url` that exists on disk, for folders Box knows about
     /// but has not materialized locally yet.
     func nearestExisting(_ url: URL) -> URL? {
-        var candidate = url.standardizedFileURL
-        let rootPath = syncRoot.standardizedFileURL.path
-        while candidate.path.hasPrefix(rootPath) {
-            if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
-            let parent = candidate.deletingLastPathComponent()
-            if parent.path == candidate.path { break }
-            candidate = parent
+        // String-based for the same reason as `resolve`: URL path manipulation on a
+        // File Provider mount triggers filesystem round trips.
+        let rootPath = syncRoot.path
+        var candidate = url.path
+        while candidate.hasPrefix(rootPath) && candidate != rootPath {
+            if FileManager.default.fileExists(atPath: candidate) {
+                return URL(fileURLWithPath: candidate)
+            }
+            guard let slash = candidate.lastIndex(of: "/") else { break }
+            candidate = String(candidate[candidate.startIndex..<slash])
         }
-        return FileManager.default.fileExists(atPath: syncRoot.path) ? syncRoot : nil
+        return FileManager.default.fileExists(atPath: rootPath) ? syncRoot : nil
     }
 
     /// Random sample of items, used by --verify to check resolution against the

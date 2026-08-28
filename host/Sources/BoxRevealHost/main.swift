@@ -41,14 +41,19 @@ func handle(_ req: Request, reveal doReveal: Bool) -> Response {
 
     if FileManager.default.fileExists(atPath: url.path) {
         if doReveal { Reveal.inFinder(url) }
-        return Response(ok: true, path: url.path, revealed: url.path)
+        return Response(ok: true, path: url.path, revealed: doReveal ? url.path : nil)
     }
 
     // Box knows the item but it isn't on disk yet. Reveal the closest ancestor
     // that does exist so the click still lands somewhere useful, and report why.
     if let fallback = resolver.nearestExisting(url) {
         if doReveal { Reveal.inFinder(fallback) }
-        return Response(ok: false, path: url.path, revealed: fallback.path, error: "not_synced")
+        return Response(
+            ok: false,
+            path: url.path,
+            revealed: doReveal ? fallback.path : nil,
+            error: "not_synced"
+        )
     }
     return Response(ok: false, path: url.path, error: "not_synced")
 }
@@ -102,23 +107,40 @@ if let i = args.firstIndex(of: "--verify") {
     }
     defer { resolver.close() }
 
+    // Two independent checks, deliberately separated. Resolving an ID against the
+    // metadata is pure local SQL and takes microseconds. Confirming the path on
+    // disk goes through Box's File Provider, which costs a network round trip
+    // (~0.7s) for any path not already cached — so it gets a much smaller sample.
+    let checkFS = !args.contains("--no-fs")
     let items = resolver.sampleItems(limit: count)
-    var ok = 0, missing = 0, unresolved = 0
-    for item in items {
+    var resolved = 0, unresolved = 0, onDisk = 0, missing = 0
+    let quiet = args.contains("--quiet")
+
+    for (n, item) in items.enumerated() {
         guard let url = try? resolver.resolve(id: item.id, type: item.type) else {
             unresolved += 1
+            if !quiet, unresolved <= 10 { print("UNRESOLVED  \(item.type) \(item.id)") }
             continue
         }
+        resolved += 1
+        guard checkFS else { continue }
+
         if FileManager.default.fileExists(atPath: url.path) {
-            ok += 1
+            onDisk += 1
         } else {
             missing += 1
-            if missing <= 10 { print("MISSING  \(item.type) \(item.id)  \(url.path)") }
+            if !quiet, missing <= 10 { print("MISSING  \(item.type) \(item.id)  \(url.path)") }
+        }
+        if (n + 1) % 25 == 0 {
+            print("  …\(n + 1)/\(items.count)")
+            fflush(stdout)
         }
     }
+
     print("sync root: \(resolver.syncRoot.path)")
-    print("sampled \(items.count): \(ok) on disk, \(missing) missing, \(unresolved) unresolved")
-    exit(missing == 0 && unresolved == 0 ? 0 : 1)
+    print("sampled \(items.count): \(resolved) resolved, \(unresolved) unresolved")
+    if checkFS { print("filesystem: \(onDisk) present, \(missing) missing") }
+    exit(unresolved == 0 && missing == 0 ? 0 : 1)
 }
 
 if args.contains("--debug") {
