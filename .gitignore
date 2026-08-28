@@ -1,0 +1,7 @@
+# SwiftPM build output
+.build/
+
+# Local Claude Code permissions (personal, not shared)
+.claude/settings.local.json
+
+.DS_Store
