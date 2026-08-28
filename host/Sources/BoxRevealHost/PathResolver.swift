@@ -128,6 +128,10 @@ struct PathResolver {
     /// this keeps a corrupt DB or a crafted message from turning the host into an
     /// arbitrary-path revealer.
     func resolve(id: String, type: ItemType) throws -> URL {
+        // Box's "All Files" page is /folder/0, which is the mount root itself. It
+        // has no path components, so it has to short-circuit the walk.
+        if id == "0", type == .folder { return syncRoot }
+
         let parts = try pathComponents(id: id, type: type)
 
         // Assembled as a string, and turned into a URL exactly once with an

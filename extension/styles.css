@@ -1,0 +1,50 @@
+.hexany-reveal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  padding: 6px 12px;
+  border: 1px solid #c3c7cd;
+  border-radius: 4px;
+  background: #fff;
+  color: #222;
+  font: 500 13px/1.2 "Lato", -apple-system, BlinkMacSystemFont, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hexany-reveal-btn:hover {
+  background: #f4f4f4;
+  border-color: #909090;
+}
+
+.hexany-reveal-btn:active {
+  background: #e8e8e8;
+}
+
+/* Used only when no header anchor matched, so the button is still reachable. */
+.hexany-reveal-btn--floating {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2147483000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.hexany-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 64px;
+  z-index: 2147483001;
+  max-width: 340px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #222;
+  color: #fff;
+  font: 400 13px/1.4 "Lato", -apple-system, BlinkMacSystemFont, sans-serif;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+}
+
+.hexany-toast--error {
+  background: #b3271e;
+}
