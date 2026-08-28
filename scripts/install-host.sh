@@ -1,25 +1,53 @@
 #!/bin/zsh
 # Registers the native-messaging helper with Chrome for the current user.
 #
-# Usage:  scripts/install-host.sh <extension-id>
+# Usage:  scripts/install-host.sh [extension-id]
 #
-# The extension ID comes from chrome://extensions with Developer mode on, after
-# loading extension/ with "Load unpacked". Chrome derives that ID from the folder
-# path, so it stays stable as long as the folder doesn't move.
+# With no argument the extension ID is looked up from Chrome's own profile data,
+# so load extension/ via "Load unpacked" at chrome://extensions first. Pass an ID
+# explicitly to skip the lookup.
 
 set -euo pipefail
 
-EXT_ID="${1:-}"
-if [[ -z "$EXT_ID" ]]; then
-  print -u2 "usage: $0 <extension-id>"
-  print -u2 "find it at chrome://extensions (Developer mode) after Load unpacked"
-  exit 64
-fi
-
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
+EXT_DIR="$REPO/extension"
 BIN="$REPO/host/.build/release/BoxRevealHost"
-MANIFEST_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+CHROME="$HOME/Library/Application Support/Google/Chrome"
+MANIFEST_DIR="$CHROME/NativeMessagingHosts"
 MANIFEST="$MANIFEST_DIR/com.hexany.boxreveal.json"
+
+EXT_ID="${1:-}"
+
+if [[ -z "$EXT_ID" ]]; then
+  # Chrome records unpacked extensions, keyed by ID, with their source path.
+  EXT_ID=$(python3 - "$CHROME" "$EXT_DIR" <<'PY'
+import json, sys, glob, os
+base, target = sys.argv[1], os.path.realpath(sys.argv[2])
+hits = set()
+for pref in glob.glob(os.path.join(base, "*", "Preferences")):
+    try:
+        data = json.load(open(pref, encoding="utf-8"))
+    except Exception:
+        continue
+    for eid, meta in (data.get("extensions", {}).get("settings", {}) or {}).items():
+        if os.path.realpath(meta.get("path", "")) == target:
+            hits.add(eid)
+print("\n".join(sorted(hits)))
+PY
+  )
+  count=$(print -r -- "$EXT_ID" | grep -c . || true)
+  if [[ "$count" -eq 0 ]]; then
+    print -u2 "Could not find the extension in Chrome."
+    print -u2 "Load it first: chrome://extensions → Developer mode → Load unpacked →"
+    print -u2 "  $EXT_DIR"
+    exit 66
+  elif [[ "$count" -gt 1 ]]; then
+    print -u2 "Multiple IDs matched; pass the right one explicitly:"
+    print -u2 "$EXT_ID"
+    exit 65
+  fi
+  print "found extension: $EXT_ID"
+fi
 
 if [[ ! -x "$BIN" ]]; then
   print "building helper…"
@@ -37,8 +65,9 @@ cat > "$MANIFEST" <<JSON
 }
 JSON
 
+print ""
 print "installed: $MANIFEST"
 print "  helper:    $BIN"
 print "  extension: $EXT_ID"
 print ""
-print "Quit and reopen Chrome for it to pick this up."
+print "Now quit Chrome completely (⌘Q) and reopen it."
