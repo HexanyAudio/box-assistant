@@ -31,6 +31,36 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
+/* Row button inherits Box's own icon-button classes; these only guarantee the
+   glyph sizes correctly if Box's styling changes or fails to apply. */
+.hexany-row-reveal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  cursor: pointer;
+}
+
+.hexany-row-reveal svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* Only if Box's classes were unavailable and we fell back to a bare button. */
+.hexany-row-reveal:not([class*="iconButton"]) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.hexany-row-reveal:not([class*="iconButton"]):hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
 .hexany-toast {
   position: fixed;
   right: 18px;

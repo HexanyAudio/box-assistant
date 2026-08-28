@@ -1,5 +1,17 @@
 (() => {
   const BTN_ID = "hexany-reveal-btn";
+  const ROW_BTN_CLASS = "hexany-row-reveal";
+  const ACTIONS_CELL = '[data-testid="actions-cell"]';
+  const ROW_SELECTOR = ".ReactVirtualized__Table__row, [role='row']";
+
+  // Deliberately not Apple's Finder mark, which is their trademark: a folder with
+  // an arrow reads as "open this over there" and matches Box's line-icon style.
+  const ICON = `<svg viewBox="0 0 20 20" width="16" height="16" fill="none"
+      stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+      stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <path d="M2.75 5.5a1 1 0 0 1 1-1h3.2a1 1 0 0 1 .8.4l.9 1.2h6.6a1 1 0 0 1 1 1v7.4a1 1 0 0 1-1 1H3.75a1 1 0 0 1-1-1z"/>
+    <path d="M11 11.25 14.5 7.75"/><path d="M11.9 7.75h2.6v2.6"/>
+  </svg>`;
 
   // Candidate anchors in Box's folder header, best first. Box ships UI changes
   // regularly, so none of these are guaranteed — if they all miss, the button
@@ -32,6 +44,13 @@
     return null;
   }
 
+  /** Identify a listed item from its name link, which carries the real ID. */
+  function itemFromRow(row) {
+    const link = row.querySelector('a[href*="/folder/"], a[href*="/file/"]');
+    const m = link?.getAttribute("href")?.match(/\/(folder|file)\/(\d+)/);
+    return m ? { type: m[1], id: m[2] } : null;
+  }
+
   function toast(text, isError) {
     document.getElementById("hexany-reveal-toast")?.remove();
     const el = document.createElement("div");
@@ -42,14 +61,12 @@
     setTimeout(() => el.remove(), 5000);
   }
 
-  function reveal() {
-    const item = currentItem();
+  function revealItem(item) {
     if (!item) return;
     if (item.shared) {
       toast(MESSAGES.shared_link, true);
       return;
     }
-
     chrome.runtime.sendMessage(
       { cmd: "reveal", type: item.type, id: item.id },
       (res) => {
@@ -64,7 +81,9 @@
     );
   }
 
-  function makeButton() {
+  // MARK: - Header button (current folder/file page)
+
+  function makeHeaderButton() {
     const btn = document.createElement("button");
     btn.id = BTN_ID;
     btn.type = "button";
@@ -74,16 +93,15 @@
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      reveal();
+      revealItem(currentItem());
     });
     return btn;
   }
 
-  function render() {
+  function renderHeader() {
     const existing = document.getElementById(BTN_ID);
     const item = currentItem();
 
-    // Only show on pages that actually have something to reveal.
     if (!item || item.shared) {
       existing?.remove();
       return;
@@ -91,7 +109,7 @@
     if (existing?.isConnected) return;
     existing?.remove();
 
-    const btn = makeButton();
+    const btn = makeHeaderButton();
     for (const sel of ANCHORS) {
       const host = document.querySelector(sel);
       if (host) {
@@ -104,8 +122,59 @@
     document.body.appendChild(btn);
   }
 
+  // MARK: - Per-row button (folder listing)
+
+  function injectRowButton(cell) {
+    if (!cell || cell.querySelector("." + ROW_BTN_CLASS)) return;
+    const row = cell.closest(ROW_SELECTOR);
+    const item = row && itemFromRow(row);
+    if (!item) return;
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    // Adopt a neighbouring action button's classes so we inherit Box's own icon
+    // styling. Those class names carry a per-build hash, so they are copied at
+    // runtime and never used as selectors.
+    const sibling = [...cell.querySelectorAll("button")].find((b) =>
+      /iconButton/.test(b.className || "")
+    );
+    btn.className = `${sibling?.className ?? ""} ${ROW_BTN_CLASS}`.trim();
+    btn.setAttribute("aria-label", "Show in Finder");
+    btn.title = "Show in Finder";
+    btn.innerHTML = ICON;
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // don't let the row treat this as a navigation click
+      revealItem(item);
+    });
+
+    cell.prepend(btn);
+  }
+
+  function sweepRows(root = document) {
+    root.querySelectorAll?.(ACTIONS_CELL).forEach(injectRowButton);
+  }
+
+  // The action buttons only exist while a row is hovered, and the list is
+  // virtualized so rows are recycled constantly. Injecting on hover matches that
+  // lifecycle exactly and avoids observing the whole document. The cell is often
+  // mounted a frame or two after the pointer arrives, hence the short retries.
+  document.addEventListener(
+    "mouseover",
+    (e) => {
+      const row = e.target instanceof Element && e.target.closest(ROW_SELECTOR);
+      if (!row) return;
+      sweepRows(row);
+      requestAnimationFrame(() => sweepRows(row));
+      setTimeout(() => sweepRows(row), 80);
+    },
+    true
+  );
+
+  // MARK: - Wiring
+
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg?.cmd === "reveal-current") reveal();
+    if (msg?.cmd === "reveal-current") revealItem(currentItem());
   });
 
   // Box is a single-page app: the URL changes without a reload, and the header is
@@ -114,21 +183,21 @@
     const original = history[method];
     history[method] = function (...args) {
       const result = original.apply(this, args);
-      queueMicrotask(render);
+      queueMicrotask(renderHeader);
       return result;
     };
   }
-  window.addEventListener("popstate", render);
+  window.addEventListener("popstate", renderHeader);
 
   let lastUrl = location.href;
   setInterval(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      render();
+      renderHeader();
     } else if (currentItem() && !document.getElementById(BTN_ID)?.isConnected) {
-      render(); // header re-rendered and dropped our button
+      renderHeader(); // header re-rendered and dropped our button
     }
   }, 700);
 
-  render();
+  renderHeader();
 })();
