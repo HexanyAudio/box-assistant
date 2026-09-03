@@ -1,23 +1,34 @@
 {
   "manifest_version": 3,
   "name": "Reveal in Finder (Box)",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Opens the Box folder or file you're viewing in Finder, via Box Drive.",
-  "permissions": ["nativeMessaging"],
+  "permissions": [
+    "nativeMessaging"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["https://*.box.com/*"],
-      "js": ["content.js"],
-      "css": ["styles.css"],
+      "matches": [
+        "https://*.box.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
       "run_at": "document_idle"
     }
   ],
   "commands": {
     "reveal-in-finder": {
-      "suggested_key": { "default": "Ctrl+Shift+F", "mac": "Command+Shift+F" },
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "Command+Shift+F"
+      },
       "description": "Reveal the current Box item in Finder"
     }
   }

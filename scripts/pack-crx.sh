@@ -48,13 +48,35 @@ print(''.join(chr(97+(b>>4))+chr(97+(b&15)) for b in h))
 ")
 
 mkdir -p "$DIST"
-rm -f "$DIST/boxreveal.crx" "$EXT_DIR.crx"
+rm -f "$DIST/boxreveal.crx"
 
-"$CHROME" --pack-extension="$EXT_DIR" --pack-extension-key="$KEY" \
+# Chrome refuses to install an off-store extension whose manifest has no
+# update_url: it assumes the Web Store, fails to find the ID there, and gives up
+# without reporting anything. The value must match where update.xml is actually
+# served, so inject it at pack time from BASE_URL instead of hardcoding it in
+# the source manifest — that keeps the two in step when the host changes, and
+# leaves `Load unpacked` working, which needs no update_url.
+STAGE_DIR=$(mktemp -d)
+STAGE="$STAGE_DIR/boxreveal"
+cp -R "$EXT_DIR" "$STAGE"
+python3 - "$STAGE/manifest.json" "$BASE_URL/update.xml" <<'MANIFEST_PY'
+import json, sys
+path, url = sys.argv[1], sys.argv[2]
+m = json.load(open(path))
+m["update_url"] = url
+json.dump(m, open(path, "w"), indent=2)
+MANIFEST_PY
+
+"$CHROME" --pack-extension="$STAGE" --pack-extension-key="$KEY" \
   --no-message-box >/dev/null 2>&1 || true
 
-[[ -f "$EXT_DIR.crx" ]] || { print -u2 "packing failed — is Chrome running?"; exit 70; }
-mv "$EXT_DIR.crx" "$DIST/boxreveal.crx"
+if [[ ! -f "$STAGE.crx" ]]; then
+  rm -rf "$STAGE_DIR"
+  print -u2 "packing failed — is Chrome running?"
+  exit 70
+fi
+mv "$STAGE.crx" "$DIST/boxreveal.crx"
+rm -rf "$STAGE_DIR"
 
 cat > "$DIST/update.xml" <<XML
 <?xml version='1.0' encoding='UTF-8'?>
