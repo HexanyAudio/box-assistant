@@ -16,7 +16,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 EXT_DIR="$REPO/extension"
-DIST="$REPO/dist"
+DIST="$REPO/docs"
 KEY="$REPO/.secrets/boxreveal.pem"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 BASE_URL="${1:-https://REPLACE-ME.hexanyaudio.com/boxreveal}"
